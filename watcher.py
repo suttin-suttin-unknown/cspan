@@ -1,6 +1,6 @@
 import time
 
-from transactions import TransactionRange, get_alias_address
+from transactions import Transactions, TransactionRange, get_alias_address
 from datetime import datetime
 from coingecko import *
 
