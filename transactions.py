@@ -75,6 +75,120 @@ def get_trade_from_transaction(transaction, wallet_address):
         print(f"Malformed transaction: {transaction}")
 
 
+
+class Transactions:
+    def __init__(self, address, transactions):
+        self.address = address
+        self.transactions = transactions
+        self._created_at = datetime.fromtimestamp(round(time.time()))
+        
+    def __len__(self):
+        return len(self.transactions)
+
+    @property
+    def token_list(self):
+        return set([t['tokenSymbol'] for t in self.transactions])
+
+    @property
+    def non_base_list(self):
+        return self.token_list - {'WETH', 'USDC', 'USDT'}
+
+    @property
+    def start_block(self):
+        return self.transactions[0]['blockNumber']
+
+    @property
+    def end_block(self):
+        return self.transactions[-1]['blockNumber']
+
+    @property
+    def is_monotonic(self):
+        return all(x <= y for x, y in zip(self.transactions, self.transactions[1:]))
+
+    def get_token_transactions(self, symbol):
+        return [t for t in self.transactions if t['tokenSymbol'] == symbol]
+
+    def get_token_trades(self, token):
+        trade_hashes = set([tx['hash'] for tx in self.get_token_transactions(token)])
+        table = {}
+        for tx in self.transactions:
+            current_hash = tx['hash']
+            if current_hash in trade_hashes:
+                if table.get(current_hash):
+                    table[current_hash].append(tx)
+                else:
+                    table[current_hash] = [tx]
+        for h, txs in table.items():
+            if len(txs) == 2:
+                from_tx, to_tx = txs
+                if to_tx['from'] == self.address:
+                    to_tx, from_tx = from_tx, to_tx
+                yield Trade(self.address, token, from_tx, to_tx)
+
+    @classmethod
+    def get_from_timestamps(cls, address, start, end=None):
+        if not end:
+            end = round(time.time())
+        return cls(address, get_address_transactions(address, start, end))
+
+
+class Trade:
+    def __init__(self, address, symbol, from_tx, to_tx):
+        self.address = address
+        self.symbol = symbol
+        self.from_tx = from_tx
+        self.to_tx = to_tx
+
+    @property
+    def timestamp(self):
+        return datetime.fromtimestamp(int(self.from_tx['timeStamp']))
+
+    @property
+    def from_token(self):
+        return self.from_tx['tokenSymbol']
+
+    @property
+    def to_token(self):
+        return self.to_tx['tokenSymbol']
+
+    @property
+    def from_value(self):
+        return -int(self.from_tx['value']) * pow(10, -int(self.from_tx['tokenDecimal']))
+
+    @property
+    def to_value(self):
+        return int(self.to_tx['value']) * pow(10, -int(self.to_tx['tokenDecimal']))
+
+    @property
+    def from_string(self):
+        return f"{self.from_value} ${self.from_token}"
+
+    @property
+    def to_string(self):
+        return f"{self.to_value} ${self.to_token}"
+
+    def __str__(self):
+        return f"{self.timestamp}: {self.from_string} -> {self.to_string}"
+
+
+def trade_is_consistent(trade):
+    hashes_equal = trade.from_tx['hash'] == trade.to_tx['hash']
+    blocks_equal = trade.from_tx['blockNumber'] == trade.to_tx['blockNumber']
+    time_equal = trade.from_tx['timeStamp'] == trade.to_tx['timeStamp']
+    return hashes_equal and blocks_equal and time_equal
+
+
+def get_trade_volume(trades, token):
+    volume = 0
+    for trade in trades:
+        if trade.symbol == token:
+            if trade.from_token == token:
+                volume += trade.from_value
+            else:
+                volume += trade.to_value
+    return volume
+    
+
 class TransactionRange:
 
     def __init__(self, address, start_block=None, end_block=None):
@@ -90,6 +204,8 @@ class TransactionRange:
         self._transactions = get_address_transactions(address, start_block, end_block)
         self._timestamp = datetime.fromtimestamp(round(time.time()))
 
+
+# TODO: Compute start and end
 
     def __len__(self):
         return len(self._transactions)
@@ -110,6 +226,7 @@ class TransactionRange:
         return info
 
 
+    # Questionable. Introduces stale state.
     def get_balance(self, token):
         balance = get_address_token_balance(self.get_info()[token]['contractAddress'], self.address)
         balance = convert_token_value(balance, self.get_info()[token]['tokenDecimal']) 
@@ -252,15 +369,4 @@ class TransactionRange:
             return 0
 
 
-class Trade:
-    def __init__(self):
-        self.transactions = transactions
-
-
-    def __dict__(self):
-        return dict([(x['txHash'], tx) for tx in self.transactions])
-
-
-    def get_tx_by_hash(self, tx_hash):
-        return self.__dict__().get(tx_hash, {})
 
