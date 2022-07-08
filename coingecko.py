@@ -35,6 +35,22 @@ duplicate_mappings = {
     'comp': 'compound-governance-token'
 }
 
+def get_market_cap_fdv_ratio(coin_id):
+    response = api.get_coin_by_id(coin_id)
+    market_data = response['market_data']
+    market_cap = market_data['market_cap']['usd']
+    fdv = market_data['fully_diluted_valuation']['usd']
+    return market_cap / fdv
+    
+def get_coin_market_data(coin_id, keys=['market_cap']):
+    try:
+        market_info = api.get_coin_by_id(coin_id)['market_data']
+        market_info = [(k, market_info.get(k)) for k in keys]
+        market_info = dict([(k, v) for k, v in market_info.items() if v])
+    except:
+        return None
+
+
 
 def get_coin_id_for_symbol(symbol):
     symbol = symbol.lower()
