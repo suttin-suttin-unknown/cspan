@@ -90,6 +90,10 @@ class Transactions:
         return set([t['tokenSymbol'] for t in self.transactions])
 
     @property
+    def non_base_list(self):
+        return self.token_list - {'WETH', 'USDC', 'USDT'}
+
+    @property
     def start_block(self):
         return self.transactions[0]['blockNumber']
 
@@ -136,6 +140,10 @@ class Trade:
         self.to_tx = to_tx
 
     @property
+    def timestamp(self):
+        return datetime.fromtimestamp(int(self.from_tx['timeStamp']))
+
+    @property
     def from_token(self):
         return self.from_tx['tokenSymbol']
 
@@ -160,7 +168,14 @@ class Trade:
         return f"{self.to_value} ${self.to_token}"
 
     def __str__(self):
-        return f"{self.from_string} -> {self.to_string}"
+        return f"{self.timestamp}: {self.from_string} -> {self.to_string}"
+
+
+def trade_is_consistent(trade):
+    hashes_equal = trade.from_tx['hash'] == trade.to_tx['hash']
+    blocks_equal = trade.from_tx['blockNumber'] == trade.to_tx['blockNumber']
+    time_equal = trade.from_tx['timeStamp'] == trade.to_tx['timeStamp']
+    return hashes_equal and blocks_equal and time_equal
 
 
 def get_trade_volume(trades, token):
