@@ -101,10 +101,6 @@ class Transactions:
     def end_block(self):
         return self.transactions[-1]['blockNumber']
 
-    @property
-    def is_monotonic(self):
-        return all(x <= y for x, y in zip(self.transactions, self.transactions[1:]))
-
     def get_token_transactions(self, symbol):
         return [t for t in self.transactions if t['tokenSymbol'] == symbol]
 
@@ -119,17 +115,46 @@ class Transactions:
                 else:
                     table[current_hash] = [tx]
         for h, txs in table.items():
-            if len(txs) == 2:
+            if len(txs) == 1:
+                tx = txs[0]
+                yield Transfer(self.address, tx)
+            elif len(txs) == 2:
                 from_tx, to_tx = txs
                 if to_tx['from'] == self.address:
                     to_tx, from_tx = from_tx, to_tx
                 yield Trade(self.address, token, from_tx, to_tx)
+            else:
+                raise Exception(f"More than 2 matches for hash {h}")
 
     @classmethod
     def get_from_timestamps(cls, address, start, end=None):
         if not end:
             end = round(time.time())
         return cls(address, get_address_transactions(address, start, end))
+
+
+class Transfer:
+    def __init__(self, address, transaction):
+        self.address = address
+        self.transaction = transaction
+
+    @property
+    def timestamp(self):
+        return datetime.fromtimestamp(int(self.transaction['timeStamp']))
+
+    @property
+    def value(self):
+        value = int(self.transaction['value'])
+        value *= -1 if self.transaction['from'] == self.address else 1
+        value *= pow(10, -int(self.transaction['tokenDecimal'])) 
+        return value
+
+    @property
+    def token(self):
+        return self.transaction['tokenSymbol']
+
+    def __str__(self):
+        return f"{self.timestamp}: {self.value} ${self.token}"
 
 
 class Trade:

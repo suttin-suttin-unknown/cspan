@@ -50,3 +50,4 @@ def run_trades(txs, token, interval=1):
             break
 
 alabama = get_alias_address('Alameda 1 (allegedly)', 'all_wallets.txt')
+
