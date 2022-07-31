@@ -7,6 +7,7 @@ from json import JSONDecodeError
 
 from config import get_etherscan_api_key
 from etherscan import Etherscan
+from dataclasses import dataclass
 
 from options import *
 
@@ -85,6 +86,16 @@ class Transactions:
     def __len__(self):
         return len(self.transactions)
 
+    def __dict__(self):
+        table = {}
+        for tx in self.transactions:
+            h = tx['hash']
+            if table.get(h):
+                table[h].append(tx)
+            else:
+                table[h] = [tx]
+        return table
+
     @property
     def token_list(self):
         return set([t['tokenSymbol'] for t in self.transactions])
@@ -101,9 +112,35 @@ class Transactions:
     def end_block(self):
         return self.transactions[-1]['blockNumber']
 
+    @property
+    def in_addresses(self):
+        return set([t['from'] for t in self.transactions if t['from'] != self.address])
+
+    @property
+    def out_addresses(self):
+        return set([t['to'] for t in self.transactions if t['to'] != self.address])
+
+    @property
+    def all_addresses(self):
+        return self.in_addresses.union(self.out_addresses)
+
     def get_token_transactions(self, symbol):
         return [t for t in self.transactions if t['tokenSymbol'] == symbol]
 
+
+    def get_token_trades2(self, token):
+        for h in set([t['hash'] for t in self.get_token_transactions(token)]):
+            txs = self.__dict__()[h]
+            if len(txs) == 1:
+                yield Transfer(self.address, txs[0])
+            elif len(txs) == 2:
+                from_tx, to_tx = txs
+                if to_tx['from'] == self.address:
+                    to_tx, from_tx = from_tx, to_tx
+                yield Trade(self.address, token, from_tx, to_tx)
+            else:
+                raise Exception(f"More than 2 matches for hash {h}")
+        
     def get_token_trades(self, token):
         trade_hashes = set([tx['hash'] for tx in self.get_token_transactions(token)])
         table = {}
@@ -156,6 +193,21 @@ class Transfer:
     def __str__(self):
         return f"{self.timestamp}: {self.value} ${self.token}"
 
+
+@dataclass
+class _Trade:
+    address: str
+    transfer_in: Transfer
+    transfer_out: Transfer
+
+    @property
+    def timestamp(self):
+        return min(self.transfer_in.timestamp, self.transfer_out.timestamp)
+
+
+
+# _Trade
+# as two transactions
 
 class Trade:
     def __init__(self, address, symbol, from_tx, to_tx):

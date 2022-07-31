@@ -16,6 +16,8 @@ def group_ids_by_symbol(coin_list):
 api = CoinGeckoAPI()
 main_list = group_ids_by_symbol(api.get_coins_list())
 
+COINGECKO_CONTRACT_REGEX = '^0X[a-fA-F0-9]{40}$'
+
 duplicate_mappings = {
     'uni': 'uniswap',
     'yfi': 'yearn-finance',
@@ -84,6 +86,10 @@ def get_inclusive_price_range(coin_id, from_timestamp, to_timestamp=round(time.t
     return dict(price_range)
 
 
+def ticker_is_onchain(ticker):
+    return re.match(COINGECKO_CONTRACT_REGEX, ticker['base']) or re.match(COINGECKO_CONTRACT_REGEX, ticker['target'])
+
+
 class Coin:
     def __init__(self, coingecko_entry):
         self.coingecko_entry = coingecko_entry
@@ -94,6 +100,11 @@ class Coin:
             return cls(api.get_coin_by_id(coingecko_id))
         except:
             raise
+
+    @property
+    def symbol(self):
+        return self.coingecko_entry['symbol']
+
 
     @property
     def coingecko_id(self):
@@ -123,8 +134,25 @@ class Coin:
         return self.tickers
 
     @property
+    def exchange_centralization(self):
+        results = []
+        exchanges = set([t['market']['identifier'] for t in self.tickers])
+        for e in exchanges:
+            info = api.get_exchanges_by_id(e)
+            results.append((e, info['centralized']))
+        return results
+
+    @property
     def exchange_spreads(self):
-        return [(t['market']['identifier'], t['bid_ask_spread_percentage']) for t in self.tickers]
+        spreads = []
+        for ticker in self.tickers:
+            try:
+                market = ticker['market']['identifier']
+                spread = float(ticker['bid_ask_spread_percentage'])
+                spreads.append((market, spread))
+            except TypeError:
+                pass
+        return spreads
 
     @property
     def min_spread_exchange(self):
@@ -159,6 +187,3 @@ class Coin:
         changes = self.coingecko_entry['market_data']['ath_change_percentage']
         return dict(zip(currencies, operator.itemgetter(*currencies)(changes)))
 
-    @property
-    def weighted_normal_spread_ratio(self):
-        return self.average_spread / self.volume_weighted_average_spread
