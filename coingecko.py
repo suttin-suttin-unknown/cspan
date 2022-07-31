@@ -1,4 +1,5 @@
 import time
+import operator
 
 from pycoingecko import CoinGeckoAPI
 
@@ -83,3 +84,81 @@ def get_inclusive_price_range(coin_id, from_timestamp, to_timestamp=round(time.t
     return dict(price_range)
 
 
+class Coin:
+    def __init__(self, coingecko_entry):
+        self.coingecko_entry = coingecko_entry
+
+    @classmethod
+    def from_coingecko_id(cls, coingecko_id):
+        try:
+            return cls(api.get_coin_by_id(coingecko_id))
+        except:
+            raise
+
+    @property
+    def coingecko_id(self):
+        return self.coingecko_entry['id']
+
+    @property
+    def tickers(self):
+        return self.coingecko_entry['tickers']
+     
+    def refresh(self):
+        self.coingecko_entry = api.get_coin_by_id(self.coingecko_id)
+
+    @property
+    def current_price(self):
+        return self.coingecko_entry['market_data']['current_price']['usd']
+
+    @property
+    def market_cap_rank(self):
+        return self.coingecko_entry['market_cap_rank']
+
+    @property
+    def twitter_name(self):
+        return self.coingecko_entry['links']['twitter_screen_name']
+
+    def sort_tickers_by(self, key):
+        self.tickers.sort(key=operator.itemgetter(key))
+        return self.tickers
+
+    @property
+    def exchange_spreads(self):
+        return [(t['market']['identifier'], t['bid_ask_spread_percentage']) for t in self.tickers]
+
+    @property
+    def min_spread_exchange(self):
+        return sorted(self.exchange_spreads, key=lambda e: e[-1])[0]
+    
+    @property
+    def max_spread_exchange(self):
+        return sorted(self.exchange_spreads, key=lambda e: e[-1])[-1]
+
+    @property
+    def average_spread(self):
+        return sum([es[-1] for es in self.exchange_spreads]) / len(self.exchange_spreads)
+
+    @property
+    def volume_weighted_average_spread(self):
+        vwas = 0
+        total_volumes = sum([t['volume'] for t in self.coingecko_entry['tickers']])
+        for t in self.coingecko_entry['tickers']:
+            weight = t['volume'] / total_volumes
+            vwas += weight * t['bid_ask_spread_percentage']
+        return vwas / len(self.exchange_spreads)
+
+    @property
+    def all_time_low_percentage(self):
+        currencies = ['usd', 'btc', 'eth']
+        changes = self.coingecko_entry['market_data']['atl_change_percentage']
+        return dict(zip(currencies, operator.itemgetter(*currencies)(changes)))
+
+    @property
+    def all_time_high_percentage(self):
+        currencies = ['usd', 'btc', 'eth']
+        changes = self.coingecko_entry['market_data']['ath_change_percentage']
+        return dict(zip(currencies, operator.itemgetter(*currencies)(changes)))
+
+    @property
+    def weighted_normal_spread_ratio(self):
+        return self.average_spread / self.volume_weighted_average_spread
