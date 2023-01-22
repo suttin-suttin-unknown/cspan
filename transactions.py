@@ -63,10 +63,14 @@ def get_address_transactions(address, start, end):
 
 
 
-def get_trade_from_transaction(transaction, wallet_address):
+def get_trade_from_transaction(transaction, wallet_address, readable_timestamp=True):
     try:
         symbol = transaction['tokenSymbol']
         timestamp = int(transaction['timeStamp'])
+
+        if readable_timestamp:
+            timestamp = str(datetime.fromtimestamp(timestamp))
+
         value = transaction['value']
         value = convert_token_value(value, transaction['tokenDecimal'])
         value_sign = -1 if wallet_address == transaction['from'] else 1
@@ -316,10 +320,10 @@ class TransactionRange:
 
 # Possibly create new trades object
 
-    def get_trades(self, token, include_hash=False):
+    def get_trades(self, token, include_hash=False, readable_timestamp=True):
         trades = []
         for tx in filter(lambda tx: tx['tokenSymbol'] == token, self._transactions):
-            trade = get_trade_from_transaction(tx, self.address)
+            trade = get_trade_from_transaction(tx, self.address, readable_timestamp)
             if include_hash:
                 trades.append((tx['hash'], trade))
             else:

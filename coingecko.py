@@ -18,25 +18,13 @@ main_list = group_ids_by_symbol(api.get_coins_list())
 
 COINGECKO_CONTRACT_REGEX = '^0X[a-fA-F0-9]{40}$'
 
-duplicate_mappings = {
-    'uni': 'uniswap',
-    'yfi': 'yearn-finance',
-    'fxs': 'frax-share',
-    'cvx': 'convex-finance',
-    'bit': 'bitdao',
-    'sand': 'the-sandbox',
-    'spell': 'spell-token',
-    'rbn': 'ribbon-finance',
-    'ape': 'apecoin',
-    'usdt': 'tether',
-    'usdc': 'usd-coin',
-    'wbtc': 'wrapped-bitcoin',
-    'mana': 'decentraland',
-    'link': 'chainlink',
-    '1inch': '1inch',
-    'sushi': 'sushi',
-    'comp': 'compound-governance-token'
-}
+
+def get_coin_info(symbol):
+    info = {}
+    entries = main_list[symbol]
+    for entry in entries:
+        info[entry] = api.get_coin_by_id(entry)
+    return info
 
 def get_market_cap_fdv_ratio(coin_id):
     response = api.get_coin_by_id(coin_id)
@@ -52,7 +40,6 @@ def get_coin_market_data(coin_id, keys=['market_cap']):
         market_info = dict([(k, v) for k, v in market_info.items() if v])
     except:
         return None
-
 
 
 def get_coin_id_for_symbol(symbol):
@@ -105,7 +92,6 @@ class Coin:
     def symbol(self):
         return self.coingecko_entry['symbol']
 
-
     @property
     def coingecko_id(self):
         return self.coingecko_entry['id']
@@ -128,6 +114,11 @@ class Coin:
     @property
     def twitter_name(self):
         return self.coingecko_entry['links']['twitter_screen_name']
+
+    @property
+    def mcap_fdv_ratio(self):
+        market_data = self.coingecko_entry['market_data']
+        return market_data['market_cap']['usd'] / market_data['fully_diluted_valuation']['usd']
 
     def sort_tickers_by(self, key):
         self.tickers.sort(key=operator.itemgetter(key))
@@ -186,4 +177,14 @@ class Coin:
         currencies = ['usd', 'btc', 'eth']
         changes = self.coingecko_entry['market_data']['ath_change_percentage']
         return dict(zip(currencies, operator.itemgetter(*currencies)(changes)))
+
+    @property
+    def lowest_volume_exchange(self):
+        ex = self.sort_tickers_by('volume')[0]
+        return (ex['market']['identifier'], ex['volume'])
+
+    @property
+    def highest_volume_exchange(self):
+        ex = self.sort_tickers_by('volume')[-1]
+        return (ex['market']['identifier'], ex['volume'])
 
